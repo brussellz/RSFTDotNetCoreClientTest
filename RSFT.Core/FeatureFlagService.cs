@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Linq;
+using System.ServiceModel;
 using FeatureFlagsService;
 
 namespace RSFT.Core
 {
     public class FeatureFlagService
     {
-        private readonly Func<IFeatureRepository> _featureFlagFactoryFunc;
-
         private DateTime _lastUpdateTime;
+
+        public string ServiceUrl { get; private set; }
         
         public string Tenant { get; private set; }
 
@@ -20,10 +21,9 @@ namespace RSFT.Core
 
         private readonly object _lockObject = new object();
 
-        public FeatureFlagService(Func<IFeatureRepository> featureFlagFactoryFunc, 
-            string tenant, string featurePrefix, int cacheTime)
+        public FeatureFlagService(string serviceUrl, string featurePrefix, string tenant, int cacheTime)
         {
-            _featureFlagFactoryFunc = featureFlagFactoryFunc;
+            ServiceUrl = serviceUrl;
             Tenant = tenant;
             FeaturePrefix = featurePrefix;
             CacheTime = cacheTime;
@@ -47,16 +47,37 @@ namespace RSFT.Core
                 return;
             }
 
-            var service = _featureFlagFactoryFunc.Invoke();
-            var result = service.GetFeatureSettingsWithOptionsAsync(new GetFeatureSettingsRequest
-            {
-                FeatureNamePrefix = FeaturePrefix
-            }).Result;
+            var service = new FeatureRepositoryClient(GetBindingForEndpoint(),
+                new EndpointAddress(ServiceUrl));
 
-            lock (_lockObject)
+            try
             {
-                Features = result;
-                _lastUpdateTime = DateTime.Now;
+                var result = service.GetFeatureSettingsWithOptionsAsync(new GetFeatureSettingsRequest
+                {
+                    FeatureNamePrefix = FeaturePrefix
+                }).Result;
+
+                service.CloseAsync();
+
+                lock (_lockObject)
+                {
+                    Features = result;
+                    _lastUpdateTime = DateTime.Now;
+                }
+            }
+            catch (Exception e)
+            {
+                service.Abort();
+                service.CloseAsync();
+                throw;
+            }
+            finally
+            {
+                var dispoableService = service as IDisposable;
+                if (dispoableService != null)
+                {
+                    dispoableService.Dispose();
+                }
             }
         }
 

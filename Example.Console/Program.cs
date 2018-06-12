@@ -16,9 +16,8 @@ namespace Example.Console
 
             FeatureFlagService =
                 new RSFT.Core.FeatureFlagService(
-                    () => new FeatureRepositoryClient(RSFT.Core.FeatureFlagService.GetBindingForEndpoint(), 
-                        new EndpointAddress("http://featureflags.boss.ebsco.com/Service/CentralizedFeatureRepository.svc")), 
-                    "PROD", "EPOP", CacheTime);
+                    "http://featureflags.boss.ebsco.com/Service/CentralizedFeatureRepository.svc", 
+                    "EPOP", "PROD", CacheTime);
 
             FeatureFlagService.Initialize();
 
